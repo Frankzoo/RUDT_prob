@@ -41,6 +41,7 @@ const ENCODING_CALIBRATION_CONDITIONS = [
 ];
 
 const PROBE_FRACTIONS = [0 / 5, 1 / 5, 2 / 5, 3 / 5, 4 / 5];
+const SCAN_DURATIONS_MS = [100, 300, 500, 700, 900, 1100, 1300, 1500];
 const MAX_BASELINE_MS = 12000;
 const MIN_VALID_BASELINE_MS = 600;
 const DEFAULT_ENCODING_MS = 700;
@@ -61,7 +62,7 @@ const timeline = [];
 
 jsPsych.data.addProperties({
   participant_id: participantId,
-  experiment_version: "prototype_2_execution_corrected_fifths",
+  experiment_version: "prototype_3_random_scan_threshold",
   amount_unit: "CNY",
   delay_unit: "week"
 });
@@ -76,6 +77,16 @@ function optionHtml(option, side) {
     <div class="option-main">
       <span class="option-delay">${option.delay}周后</span>
       <span class="option-amount">${option.amount}元</span>
+    </div>
+  </div>`;
+}
+
+function scanOptionHtml(side) {
+  return `<div class="option-card" id="${side}-option">
+    <div class="option-label">${side === "left" ? "左侧选项" : "右侧选项"}</div>
+    <div class="option-main">
+      <span class="option-delay">X周后</span>
+      <span class="option-amount">XX元</span>
     </div>
   </div>`;
 }
@@ -154,17 +165,16 @@ function practiceTrial(condition, index) {
 
 function encodingCalibrationTrial(spec, index) {
   const condition = spec.condition;
-  const options = trialOptions(condition, spec.llSide);
   return {
     type: jsPsychHtmlKeyboardResponse,
     choices: [" "],
     stimulus: `<div class="decision-wrap">
-      <div class="decision-prompt">刚好看清左右两个选项的全部内容时，请立即按空格键</div>
+      <div class="decision-prompt">目光扫过左右两个选项后，请立即按空格键</div>
       <div class="options">
-        ${optionHtml(options.left, "left")}
-        ${optionHtml(options.right, "right")}
+        ${scanOptionHtml("left")}
+        ${scanOptionHtml("right")}
       </div>
-      <div class="key-hint">看清后立即按空格</div>
+      <div class="key-hint">扫过两边后立即按空格</div>
     </div>`,
     data: {
       phase: "encoding_calibration",
@@ -246,7 +256,9 @@ function participantExecutionTime() {
 }
 
 function participantEncodingTime() {
-  return Math.max(0, participantReadAndPressTime() - participantExecutionTime());
+  const yesDurations = jsPsych.data.get().filter({ phase: "scan_threshold_response", can_scan_all: true })
+    .select("scan_duration_ms").values.map(Number).filter(Number.isFinite);
+  return yesDurations.length ? Math.min(...yesDurations) : Math.max(...SCAN_DURATIONS_MS);
 }
 
 function baselineSummary(conditionId) {
@@ -265,17 +277,14 @@ function baselineSummary(conditionId) {
     totalBase = fallback;
     source = "participant_median_fallback";
   }
-  const readAndPressTime = participantReadAndPressTime();
-  const executionTime = participantExecutionTime();
   const encodingTime = participantEncodingTime();
-  const unboundedDecisionBase = totalBase - encodingTime - executionTime;
+  const unboundedDecisionBase = totalBase - encodingTime;
   const decisionBase = Math.max(MIN_DECISION_COMPONENT_MS, unboundedDecisionBase);
   const choices = rows.map(x => x.choice).filter(Boolean);
   return {
     baseline_rt: decisionBase,
     baseline_total_rt: totalBase,
-    read_and_press_time_ms: readAndPressTime,
-    execution_time_ms: executionTime,
+    scan_threshold_ms: encodingTime,
     encoding_time_ms: encodingTime,
     baseline_decision_rt: decisionBase,
     decision_rt_was_clamped: unboundedDecisionBase < MIN_DECISION_COMPONENT_MS,
@@ -542,68 +551,59 @@ timeline.push({
   }
 });
 
-timeline.push(spacePage(`<h2>阅读速度测量</h2>
-  <p>接下来有10道题，用来了解你看清选项需要多长时间。</p>
-  <p>每道题中，当你刚好看清左右两个选项的时间和金额时，请立即按空格键。</p>
-  <p><b>这一部分不需要选择，也不要比较哪一个更好。</b></p>`, {
-  phase: "encoding_calibration_instruction"
+timeline.push(spacePage(`<h2>快速扫视测量</h2>
+  <p>接下来有8道题。每道题中，左右两边会短暂出现“X周后 / XX元”，随后自动消失。</p>
+  <p>请在内容出现时快速扫视左右两边。内容消失后，请报告刚才是否有足够时间让目光扫过左右两边的全部内容。</p>
+  <p class="key-hint">F = 没能全部扫过　　J = 能够全部扫过</p></div>`, {
+  phase: "scan_threshold_instruction"
 }));
 
-const calibrationSides = shuffled([
-  "left", "left", "left", "left", "left",
-  "right", "right", "right", "right", "right"
-]);
-shuffled(ENCODING_CALIBRATION_CONDITIONS).forEach((condition, index) => {
+shuffled(SCAN_DURATIONS_MS).forEach((duration, index) => {
   timeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: '<div class="fixation">+</div>',
     choices: "NO_KEYS",
     trial_duration: 500,
-    data: { phase: "encoding_calibration_fixation" }
+    data: { phase: "scan_threshold_fixation", calibration_trial_index: index + 1 }
   });
-  timeline.push(encodingCalibrationTrial({ condition, llSide: calibrationSides[index] }, index));
-});
-
-timeline.push({
-  type: jsPsychHtmlKeyboardResponse,
-  stimulus: () => `<div class="page"><h2>阅读速度测量完成</h2>
-    <p>程序已经记录“看清并按键”的时间。</p>
-    <p class="session-note">按空格键继续按键速度测量</p></div>`,
-  choices: [" "],
-  data: { phase: "encoding_calibration_summary" },
-  on_start: trial => {
-    trial.data.read_and_press_time_ms = participantReadAndPressTime();
-  }
-});
-
-timeline.push(spacePage(`<h2>按键速度测量</h2>
-  <p>接下来有10次按键速度测量。</p>
-  <p>每次看到“现在”出现，就立即按空格键。</p>
-  <p><b>不需要阅读选项，也不需要做选择。</b></p>`, {
-  phase: "execution_calibration_instruction"
-}));
-
-for (let index = 0; index < 10; index++) {
   timeline.push({
     type: jsPsychHtmlKeyboardResponse,
-    stimulus: '<div class="fixation">+</div>',
+    stimulus: `<div class="decision-wrap"><div class="options">
+      ${scanOptionHtml("left")}${scanOptionHtml("right")}
+    </div></div>`,
     choices: "NO_KEYS",
-    trial_duration: jsPsych.randomization.sampleWithoutReplacement([700, 900, 1100, 1300], 1)[0],
-    data: { phase: "execution_calibration_fixation" }
+    trial_duration: duration,
+    data: {
+      phase: "scan_threshold_stimulus",
+      calibration_trial_index: index + 1,
+      scan_duration_ms: duration
+    }
   });
-  timeline.push(executionCalibrationTrial(index));
-}
+  timeline.push({
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `<div class="page"><h2>刚才有足够时间扫过左右两边的全部内容吗？</h2>
+      <p class="key-hint">F = 没有　　J = 有</p></div>`,
+    choices: ["f", "j"],
+    data: {
+      phase: "scan_threshold_response",
+      calibration_trial_index: index + 1,
+      scan_duration_ms: duration
+    },
+    on_finish: data => {
+      data.can_scan_all = data.response === "j";
+    }
+  });
+});
 
 timeline.push({
   type: jsPsychHtmlKeyboardResponse,
-  stimulus: () => `<div class="page"><h2>个人时间测量完成</h2>
-    <p>程序已经记录你的看清内容时间和按键执行时间。</p>
+  stimulus: () => `<div class="page"><h2>快速扫视测量完成</h2>
+    <p>程序已经确定你的个人扫视时间。</p>
     <p class="session-note">按空格键进入正式实验</p></div>`,
   choices: [" "],
-  data: { phase: "calibration_summary" },
+  data: { phase: "scan_threshold_summary" },
   on_start: trial => {
-    trial.data.read_and_press_time_ms = participantReadAndPressTime();
-    trial.data.execution_time_ms = participantExecutionTime();
+    trial.data.scan_threshold_ms = participantEncodingTime();
     trial.data.encoding_time_ms = participantEncodingTime();
   }
 });
