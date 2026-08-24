@@ -31,7 +31,7 @@ const MIN_VALID_BASELINE_MS = 600;
 const ITI_MS = [500, 800];
 
 const jsPsych = initJsPsych({
-  on_finish: () => jsPsych.data.get().localSave("csv", `intertemporal_probe_${participantId}.csv`)
+  on_finish: () => jsPsych.data.get().localSave("csv", `intertemporal_preference_${participantId}.csv`)
 });
 
 const urlId = jsPsych.data.getURLVariable("participant_id") || jsPsych.data.getURLVariable("subject");
@@ -369,7 +369,7 @@ timeline.push(spacePage(`<div class="instruction"><h2>实验说明</h2>
   <p>第一阶段需要选择最终更偏好的选项：偏好左侧请按F键，偏好右侧请按J键。后续阶段会在思考过程中询问你“此时此刻”的偏好。</p></div>`, { phase: "instruction" }));
 
 timeline.push(spacePage(`<div class="instruction"><h2>注意</h2>
-  <p>后续阶段到达探针时间时，两个选项会立即消失。请根据选项消失那一刻的偏好完成滑块；提交后该题直接结束，不再做最终二选一。</p>
+      <p>后续阶段中，两个选项会在你思考时自动消失。选项消失后，请通过滑块报告它们消失那一刻你更偏好哪一个；提交后该题直接结束。</p>
   <p>滑块必须移动后才能提交。</p></div>`, { phase: "instruction" }));
 
 const practiceTimeline = [];
@@ -388,8 +388,8 @@ PRACTICE_CONDITIONS.forEach((condition, index) => {
   practiceTimeline.push(practiceTrial(condition, index));
 });
 
-practiceTimeline.push(spacePage(`<h2>思维探针练习</h2>
-  <p>下面完成3道探针练习。两个选项会在思考过程中消失；请报告选项消失那一刻的即时偏好。</p>
+practiceTimeline.push(spacePage(`<h2>中途偏好报告练习</h2>
+  <p>下面完成3道练习。两个选项会在你思考时自动消失；消失后，请报告那一刻你更偏好哪一个。</p>
   <p>刺激消失后不会再次显示，请在刺激呈现期间认真阅读。</p>`, {
   phase: "probe_practice_instruction"
 }));
@@ -442,7 +442,7 @@ const probeSessions = buildBalancedProbeSessions();
 probeSessions.forEach((specs, probeSessionIndex) => {
   const sessionId = probeSessionIndex + 2;
   timeline.push(oneMinuteRest(sessionId));
-  timeline.push(sessionStart(sessionId, "本阶段的探针时间会在1/6、2/6、3/6、4/6和5/6之间混合呈现。请报告刺激消失时的即时偏好。"));
+  timeline.push(sessionStart(sessionId, "本阶段中，两个选项会在你思考时自动消失。选项消失后，请报告它们消失那一刻你更偏好哪一个。"));
   specs.forEach((spec, index) => {
     timeline.push({ type: jsPsychHtmlKeyboardResponse, stimulus: '<div class="fixation">+</div>', choices: "NO_KEYS", trial_duration: 500 });
     timeline.push(probeTrial(spec, sessionId, index));
