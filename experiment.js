@@ -22,12 +22,33 @@ const CONDITIONS = [
 const PRACTICE_CONDITIONS = [
   { id: "P01", ssAmount: 12, ssDelay: 1, llAmount: 20, llDelay: 4 },
   { id: "P02", ssAmount: 25, ssDelay: 1, llAmount: 30, llDelay: 4 },
-  { id: "P03", ssAmount: 35, ssDelay: 1, llAmount: 70, llDelay: 4 }
+  { id: "P03", ssAmount: 35, ssDelay: 1, llAmount: 70, llDelay: 4 },
+  { id: "P04", ssAmount: 18, ssDelay: 1, llAmount: 25, llDelay: 4 },
+  { id: "P05", ssAmount: 42, ssDelay: 1, llAmount: 55, llDelay: 4 }
 ];
 
-const PROBE_FRACTIONS = [1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6];
+const ENCODING_CALIBRATION_CONDITIONS = [
+  { id: "E01", ssAmount: 12, ssDelay: 1, llAmount: 15, llDelay: 4 },
+  { id: "E02", ssAmount: 14, ssDelay: 1, llAmount: 20, llDelay: 4 },
+  { id: "E03", ssAmount: 16, ssDelay: 1, llAmount: 29, llDelay: 4 },
+  { id: "E04", ssAmount: 18, ssDelay: 1, llAmount: 23, llDelay: 4 },
+  { id: "E05", ssAmount: 22, ssDelay: 1, llAmount: 38, llDelay: 4 },
+  { id: "E06", ssAmount: 24, ssDelay: 1, llAmount: 30, llDelay: 4 },
+  { id: "E07", ssAmount: 26, ssDelay: 1, llAmount: 47, llDelay: 4 },
+  { id: "E08", ssAmount: 28, ssDelay: 1, llAmount: 35, llDelay: 4 },
+  { id: "E09", ssAmount: 32, ssDelay: 1, llAmount: 58, llDelay: 4 },
+  { id: "E10", ssAmount: 36, ssDelay: 1, llAmount: 45, llDelay: 4 }
+];
+
+const PROBE_FRACTIONS = [0 / 5, 1 / 5, 2 / 5, 3 / 5, 4 / 5];
 const MAX_BASELINE_MS = 12000;
 const MIN_VALID_BASELINE_MS = 600;
+const DEFAULT_ENCODING_MS = 700;
+const DEFAULT_EXECUTION_MS = 200;
+const MIN_VALID_ENCODING_MS = 200;
+const MAX_VALID_ENCODING_MS = 3000;
+const MIN_DECISION_COMPONENT_MS = 100;
+const SLIDER_RESPONSE_LIMIT_MS = 3000;
 const ITI_MS = [500, 800];
 
 const jsPsych = initJsPsych({
@@ -40,7 +61,7 @@ const timeline = [];
 
 jsPsych.data.addProperties({
   participant_id: participantId,
-  experiment_version: "prototype_1",
+  experiment_version: "prototype_2_execution_corrected_fifths",
   amount_unit: "CNY",
   delay_unit: "week"
 });
@@ -131,6 +152,51 @@ function practiceTrial(condition, index) {
   return trial;
 }
 
+function encodingCalibrationTrial(spec, index) {
+  const condition = spec.condition;
+  const options = trialOptions(condition, spec.llSide);
+  return {
+    type: jsPsychHtmlKeyboardResponse,
+    choices: [" "],
+    stimulus: `<div class="decision-wrap">
+      <div class="decision-prompt">刚好看清左右两个选项的全部内容时，请立即按空格键</div>
+      <div class="options">
+        ${optionHtml(options.left, "left")}
+        ${optionHtml(options.right, "right")}
+      </div>
+      <div class="key-hint">看清后立即按空格</div>
+    </div>`,
+    data: {
+      phase: "encoding_calibration",
+      calibration_trial_index: index + 1,
+      ...conditionData(condition, spec.llSide)
+    },
+    on_finish: data => {
+      data.encoding_rt = data.rt;
+    },
+    post_trial_gap: jsPsych.randomization.sampleWithoutReplacement(ITI_MS, 1)[0]
+  };
+}
+
+function executionCalibrationTrial(index) {
+  return {
+    type: jsPsychHtmlKeyboardResponse,
+    choices: [" "],
+    stimulus: `<div class="page">
+      <div style="font-size:56px;font-weight:700;">现在</div>
+      <div class="key-hint">看到画面立即按空格</div>
+    </div>`,
+    data: {
+      phase: "execution_calibration",
+      calibration_trial_index: index + 1
+    },
+    on_finish: data => {
+      data.execution_rt = data.rt;
+    },
+    post_trial_gap: jsPsych.randomization.sampleWithoutReplacement(ITI_MS, 1)[0]
+  };
+}
+
 function probePracticeTrial(condition, fraction, index) {
   const spec = {
     condition,
@@ -160,25 +226,59 @@ function participantFallbackRt() {
   return rts.length % 2 ? rts[mid] : (rts[mid - 1] + rts[mid]) / 2;
 }
 
+function medianValidCalibration(phase, field, fallback) {
+  const values = jsPsych.data.get().filter({ phase })
+    .select(field).values
+    .map(Number)
+    .filter(x => Number.isFinite(x) && x >= MIN_VALID_ENCODING_MS && x <= MAX_VALID_ENCODING_MS)
+    .sort((a, b) => a - b);
+  if (!values.length) return fallback;
+  const mid = Math.floor(values.length / 2);
+  return values.length % 2 ? values[mid] : (values[mid - 1] + values[mid]) / 2;
+}
+
+function participantReadAndPressTime() {
+  return medianValidCalibration("encoding_calibration", "encoding_rt", DEFAULT_ENCODING_MS);
+}
+
+function participantExecutionTime() {
+  return medianValidCalibration("execution_calibration", "execution_rt", DEFAULT_EXECUTION_MS);
+}
+
+function participantEncodingTime() {
+  return Math.max(0, participantReadAndPressTime() - participantExecutionTime());
+}
+
 function baselineSummary(conditionId) {
   const rows = jsPsych.data.get().filter({ phase: "baseline", condition_id: conditionId }).values();
   const valid = rows.map(x => Number(x.decision_rt)).filter(validBaselineRt);
   const fallback = participantFallbackRt();
-  let base;
+  let totalBase;
   let source;
   if (valid.length === 2) {
-    base = Math.sqrt(valid[0] * valid[1]);
+    totalBase = Math.sqrt(valid[0] * valid[1]);
     source = "condition_geometric_mean";
   } else if (valid.length === 1) {
-    base = valid[0];
+    totalBase = valid[0];
     source = "single_valid_condition_rt";
   } else {
-    base = fallback;
+    totalBase = fallback;
     source = "participant_median_fallback";
   }
+  const readAndPressTime = participantReadAndPressTime();
+  const executionTime = participantExecutionTime();
+  const encodingTime = participantEncodingTime();
+  const unboundedDecisionBase = totalBase - encodingTime - executionTime;
+  const decisionBase = Math.max(MIN_DECISION_COMPONENT_MS, unboundedDecisionBase);
   const choices = rows.map(x => x.choice).filter(Boolean);
   return {
-    baseline_rt: base,
+    baseline_rt: decisionBase,
+    baseline_total_rt: totalBase,
+    read_and_press_time_ms: readAndPressTime,
+    execution_time_ms: executionTime,
+    encoding_time_ms: encodingTime,
+    baseline_decision_rt: decisionBase,
+    decision_rt_was_clamped: unboundedDecisionBase < MIN_DECISION_COMPONENT_MS,
     baseline_rt_source: source,
     baseline_choice_consistent: choices.length === 2 ? choices[0] === choices[1] : null,
     baseline_choice_1: choices[0] || null,
@@ -230,6 +330,7 @@ function probeTrial(spec, sessionId, index) {
   const condition = spec.condition;
   const options = trialOptions(condition, spec.llSide);
   let timerId;
+  let responseTimerId;
   return {
     type: jsPsychHtmlKeyboardResponse,
     choices: "NO_KEYS",
@@ -263,7 +364,8 @@ function probeTrial(spec, sessionId, index) {
     on_load: () => {
       const stimulusOnset = performance.now();
       const baseline = baselineSummary(condition.id);
-      const plannedDelay = baseline.baseline_rt * spec.fraction;
+      const plannedDecisionDelay = baseline.baseline_decision_rt * spec.fraction;
+      const plannedDelay = baseline.encoding_time_ms + plannedDecisionDelay;
       timerId = window.setTimeout(() => {
         const actualProbeOnset = performance.now();
         const probeArea = document.getElementById("probe-area");
@@ -274,29 +376,44 @@ function probeTrial(spec, sessionId, index) {
         stimulusPanel.remove();
         probeArea.hidden = false;
         let moved = false;
+        let finished = false;
         const update = () => {
           moved = true;
           valueText.textContent = `当前选择：${slider.value}`;
           submit.disabled = false;
         };
-        slider.addEventListener("input", update);
-        submit.addEventListener("click", () => {
-          if (!moved) return;
-          const raw = Number(slider.value);
-          const llPreference = spec.llSide === "right" ? raw : 100 - raw;
+        const finishResponse = timedOut => {
+          if (finished) return;
+          finished = true;
+          window.clearTimeout(responseTimerId);
+          const raw = moved ? Number(slider.value) : null;
+          const llPreference = raw === null ? null : (spec.llSide === "right" ? raw : 100 - raw);
           jsPsych.finishTrial({
             ...baseline,
             planned_probe_ms: plannedDelay,
+            planned_decision_fraction_ms: plannedDecisionDelay,
             actual_probe_ms: actualProbeOnset - stimulusOnset,
             probe_timing_error_ms: actualProbeOnset - stimulusOnset - plannedDelay,
             slider_raw: raw,
             slider_ll_preference: llPreference,
+            slider_moved: moved,
+            slider_timed_out: timedOut,
+            slider_response_limit_ms: SLIDER_RESPONSE_LIMIT_MS,
             slider_rt: performance.now() - actualProbeOnset
           });
+        };
+        slider.addEventListener("input", update);
+        submit.addEventListener("click", () => {
+          if (!moved) return;
+          finishResponse(false);
         }, { once: true });
+        responseTimerId = window.setTimeout(() => finishResponse(true), SLIDER_RESPONSE_LIMIT_MS);
       }, plannedDelay);
     },
-    on_finish: () => window.clearTimeout(timerId),
+    on_finish: () => {
+      window.clearTimeout(timerId);
+      window.clearTimeout(responseTimerId);
+    },
     post_trial_gap: jsPsych.randomization.sampleWithoutReplacement(ITI_MS, 1)[0]
   };
 }
@@ -374,7 +491,7 @@ timeline.push(spacePage(`<div class="instruction"><h2>注意</h2>
 
 const practiceTimeline = [];
 practiceTimeline.push(spacePage(`<h2>二项选择练习</h2>
-  <p>下面先完成3道最终选择练习题。偏好左侧按F键，偏好右侧按J键。</p>`, {
+  <p>下面先完成5道最终选择练习题。偏好左侧按F键，偏好右侧按J键。</p>`, {
   phase: "practice_instruction"
 }));
 PRACTICE_CONDITIONS.forEach((condition, index) => {
@@ -389,11 +506,11 @@ PRACTICE_CONDITIONS.forEach((condition, index) => {
 });
 
 practiceTimeline.push(spacePage(`<h2>中途偏好报告练习</h2>
-  <p>下面完成3道练习。两个选项会在你思考时自动消失；消失后，请报告那一刻你更偏好哪一个。</p>
+  <p>下面完成5道练习。两个选项会在你思考时自动消失；消失后，请在3秒内报告那一刻你更偏好哪一个。</p>
   <p>刺激消失后不会再次显示，请在刺激呈现期间认真阅读。</p>`, {
   phase: "probe_practice_instruction"
 }));
-[1 / 6, 3 / 6, 5 / 6].forEach((fraction, index) => {
+PROBE_FRACTIONS.forEach((fraction, index) => {
   practiceTimeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: '<div class="fixation">+</div>',
@@ -422,6 +539,72 @@ timeline.push({
   loop_function: data => {
     const check = data.filter({ phase: "practice_familiarity_check" }).last(1).values()[0];
     return check && check.practice_action === "repeat";
+  }
+});
+
+timeline.push(spacePage(`<h2>阅读速度测量</h2>
+  <p>接下来有10道题，用来了解你看清选项需要多长时间。</p>
+  <p>每道题中，当你刚好看清左右两个选项的时间和金额时，请立即按空格键。</p>
+  <p><b>这一部分不需要选择，也不要比较哪一个更好。</b></p>`, {
+  phase: "encoding_calibration_instruction"
+}));
+
+const calibrationSides = shuffled([
+  "left", "left", "left", "left", "left",
+  "right", "right", "right", "right", "right"
+]);
+shuffled(ENCODING_CALIBRATION_CONDITIONS).forEach((condition, index) => {
+  timeline.push({
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: '<div class="fixation">+</div>',
+    choices: "NO_KEYS",
+    trial_duration: 500,
+    data: { phase: "encoding_calibration_fixation" }
+  });
+  timeline.push(encodingCalibrationTrial({ condition, llSide: calibrationSides[index] }, index));
+});
+
+timeline.push({
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: () => `<div class="page"><h2>阅读速度测量完成</h2>
+    <p>程序已经记录“看清并按键”的时间。</p>
+    <p class="session-note">按空格键继续按键速度测量</p></div>`,
+  choices: [" "],
+  data: { phase: "encoding_calibration_summary" },
+  on_start: trial => {
+    trial.data.read_and_press_time_ms = participantReadAndPressTime();
+  }
+});
+
+timeline.push(spacePage(`<h2>按键速度测量</h2>
+  <p>接下来有10次按键速度测量。</p>
+  <p>每次看到“现在”出现，就立即按空格键。</p>
+  <p><b>不需要阅读选项，也不需要做选择。</b></p>`, {
+  phase: "execution_calibration_instruction"
+}));
+
+for (let index = 0; index < 10; index++) {
+  timeline.push({
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: '<div class="fixation">+</div>',
+    choices: "NO_KEYS",
+    trial_duration: jsPsych.randomization.sampleWithoutReplacement([700, 900, 1100, 1300], 1)[0],
+    data: { phase: "execution_calibration_fixation" }
+  });
+  timeline.push(executionCalibrationTrial(index));
+}
+
+timeline.push({
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: () => `<div class="page"><h2>个人时间测量完成</h2>
+    <p>程序已经记录你的看清内容时间和按键执行时间。</p>
+    <p class="session-note">按空格键进入正式实验</p></div>`,
+  choices: [" "],
+  data: { phase: "calibration_summary" },
+  on_start: trial => {
+    trial.data.read_and_press_time_ms = participantReadAndPressTime();
+    trial.data.execution_time_ms = participantExecutionTime();
+    trial.data.encoding_time_ms = participantEncodingTime();
   }
 });
 
