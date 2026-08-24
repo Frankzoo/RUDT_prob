@@ -1,0 +1,65 @@
+:root {
+  --ink: #202733;
+  --muted: #667085;
+  --line: #d6dae1;
+  --accent: #2457a6;
+  --accent-dark: #183d79;
+  --panel: #f8fafc;
+}
+
+body {
+  color: var(--ink);
+  background: #fff;
+  font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+
+.page { width: min(920px, 90vw); margin: 0 auto; }
+.instruction { font-size: 20px; line-height: 1.9; text-align: left; }
+.fixation { font-size: 54px; font-weight: 300; }
+
+.decision-wrap { width: min(960px, 92vw); margin: 0 auto; }
+.decision-prompt { font-size: 23px; margin-bottom: 34px; }
+.options { display: grid; grid-template-columns: 1fr 1fr; gap: 72px; }
+.option-card {
+  min-height: 135px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+.option-label { color: var(--muted); font-size: 17px; margin-bottom: 10px; }
+.option-main { font-size: 29px; font-weight: 650; line-height: 1.55; }
+.option-delay, .option-amount { display: block; }
+.key-hint { margin-top: 26px; color: var(--muted); font-size: 18px; }
+
+.probe-area { margin-top: 34px; padding-top: 25px; border-top: 1px solid var(--line); }
+.probe-question { font-size: 22px; margin-bottom: 24px; }
+.range-row { display: grid; grid-template-columns: 190px 1fr 190px; gap: 18px; align-items: center; }
+.range-anchor { font-size: 17px; line-height: 1.5; }
+.range-anchor:first-child { text-align: right; }
+.range-anchor:last-child { text-align: left; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.range-value { font-size: 21px; font-weight: 650; margin-top: 12px; min-height: 32px; }
+.submit-probe {
+  margin-top: 20px;
+  padding: 11px 30px;
+  border: 0;
+  border-radius: 7px;
+  color: #fff;
+  background: var(--accent);
+  font-size: 17px;
+  cursor: pointer;
+}
+.submit-probe:disabled { opacity: .42; cursor: not-allowed; }
+.submit-probe:not(:disabled):hover { background: var(--accent-dark); }
+.session-note { color: var(--muted); font-size: 17px; }
+
+@media (max-width: 720px) {
+  .options { gap: 18px; }
+  .option-main { font-size: 23px; }
+  .range-row { grid-template-columns: 110px 1fr 110px; }
+}
