@@ -49,7 +49,7 @@ const DEFAULT_EXECUTION_MS = 200;
 const MIN_VALID_ENCODING_MS = 200;
 const MAX_VALID_ENCODING_MS = 3000;
 const MIN_DECISION_COMPONENT_MS = 100;
-const SLIDER_RESPONSE_LIMIT_MS = 3000;
+const CLICK_RESPONSE_LIMIT_MS = 1000;
 const ITI_MS = [500, 800];
 
 const jsPsych = initJsPsych({
@@ -62,7 +62,7 @@ const timeline = [];
 
 jsPsych.data.addProperties({
   participant_id: participantId,
-  experiment_version: "prototype_3_random_scan_threshold",
+  experiment_version: "prototype_5_masked_mouse_line",
   amount_unit: "CNY",
   delay_unit: "week"
 });
@@ -87,6 +87,18 @@ function scanOptionHtml(side) {
     <div class="option-main">
       <span class="option-delay">X周后</span>
       <span class="option-amount">XX元</span>
+    </div>
+  </div>`;
+}
+
+function maskedOptionHtml(side) {
+  const masks = ["#%#", "%&#", "&%&", "#&#"];
+  const first = jsPsych.randomization.sampleWithoutReplacement(masks, 1)[0];
+  const second = jsPsych.randomization.sampleWithoutReplacement(masks, 1)[0];
+  return `<div class="option-card masked-option" data-side="${side}">
+    <div class="option-main mask-content">
+      <span class="option-delay">${first}</span>
+      <span class="option-amount">${second}</span>
     </div>
   </div>`;
 }
@@ -224,6 +236,28 @@ function probePracticeTrial(condition, fraction, index) {
   return trial;
 }
 
+function mouseCenterTrial(phase, sessionId, index) {
+  return {
+    type: jsPsychHtmlKeyboardResponse,
+    choices: "NO_KEYS",
+    stimulus: `<div class="mouse-center-page">
+      <button type="button" class="mouse-start-target" id="mouse-start-target">点击此处开始</button>
+      <p class="session-note">请将鼠标移回屏幕中央</p>
+    </div>`,
+    data: {
+      phase,
+      session_id: sessionId,
+      session_trial_index: index + 1
+    },
+    on_load: () => {
+      const target = document.getElementById("mouse-start-target");
+      target.addEventListener("click", () => {
+        jsPsych.finishTrial({ mouse_center_confirmed: true });
+      }, { once: true });
+    }
+  };
+}
+
 function validBaselineRt(rt) {
   return Number.isFinite(rt) && rt >= MIN_VALID_BASELINE_MS && rt <= MAX_BASELINE_MS;
 }
@@ -352,14 +386,19 @@ function probeTrial(spec, sessionId, index) {
       </div>
       </div>
       <div class="probe-area" id="probe-area" hidden>
-        <div class="probe-question">此时此刻，你更偏好哪一个选项？</div>
-        <div class="range-row">
-          <div class="range-anchor">0<br>完全偏好左侧</div>
-          <input id="preference-slider" type="range" min="0" max="100" step="1" value="50">
-          <div class="range-anchor">100<br>完全偏好右侧</div>
+        <div class="options masked-options">
+          ${maskedOptionHtml("left")}
+          ${maskedOptionHtml("right")}
         </div>
-        <div class="range-value" id="range-value">请移动滑块</div>
-        <button class="submit-probe" id="submit-probe" disabled>提交</button>
+        <div class="click-now-cue">立即点击</div>
+        <div class="preference-line-wrap">
+          <div class="line-anchor left-anchor">偏好左侧</div>
+          <div class="preference-line" id="preference-line">
+            <div class="line-midpoint"></div>
+            <div class="preference-marker" id="preference-marker" hidden></div>
+          </div>
+          <div class="line-anchor right-anchor">偏好右侧</div>
+        </div>
       </div>
     </div>`,
     data: {
@@ -379,23 +418,20 @@ function probeTrial(spec, sessionId, index) {
         const actualProbeOnset = performance.now();
         const probeArea = document.getElementById("probe-area");
         const stimulusPanel = document.getElementById("stimulus-panel");
-        const slider = document.getElementById("preference-slider");
-        const valueText = document.getElementById("range-value");
-        const submit = document.getElementById("submit-probe");
+        const preferenceLine = document.getElementById("preference-line");
+        const preferenceMarker = document.getElementById("preference-marker");
         stimulusPanel.remove();
         probeArea.hidden = false;
-        let moved = false;
         let finished = false;
-        const update = () => {
-          moved = true;
-          valueText.textContent = `当前选择：${slider.value}`;
-          submit.disabled = false;
+        const positionFromEvent = event => {
+          const rect = preferenceLine.getBoundingClientRect();
+          const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+          return { x, raw: Math.round((x / rect.width) * 100) };
         };
-        const finishResponse = timedOut => {
+        const finishResponse = (raw, timedOut) => {
           if (finished) return;
           finished = true;
           window.clearTimeout(responseTimerId);
-          const raw = moved ? Number(slider.value) : null;
           const llPreference = raw === null ? null : (spec.llSide === "right" ? raw : 100 - raw);
           jsPsych.finishTrial({
             ...baseline,
@@ -403,20 +439,25 @@ function probeTrial(spec, sessionId, index) {
             planned_decision_fraction_ms: plannedDecisionDelay,
             actual_probe_ms: actualProbeOnset - stimulusOnset,
             probe_timing_error_ms: actualProbeOnset - stimulusOnset - plannedDelay,
-            slider_raw: raw,
-            slider_ll_preference: llPreference,
-            slider_moved: moved,
-            slider_timed_out: timedOut,
-            slider_response_limit_ms: SLIDER_RESPONSE_LIMIT_MS,
-            slider_rt: performance.now() - actualProbeOnset
+            line_raw: raw,
+            line_ll_preference: llPreference,
+            line_timed_out: timedOut,
+            line_response_limit_ms: CLICK_RESPONSE_LIMIT_MS,
+            line_rt: performance.now() - actualProbeOnset
           });
         };
-        slider.addEventListener("input", update);
-        submit.addEventListener("click", () => {
-          if (!moved) return;
-          finishResponse(false);
+        preferenceLine.addEventListener("mousemove", event => {
+          const position = positionFromEvent(event);
+          preferenceMarker.hidden = false;
+          preferenceMarker.style.left = `${position.x}px`;
+        });
+        preferenceLine.addEventListener("mouseleave", () => {
+          preferenceMarker.hidden = true;
+        });
+        preferenceLine.addEventListener("click", event => {
+          finishResponse(positionFromEvent(event).raw, false);
         }, { once: true });
-        responseTimerId = window.setTimeout(() => finishResponse(true), SLIDER_RESPONSE_LIMIT_MS);
+        responseTimerId = window.setTimeout(() => finishResponse(null, true), CLICK_RESPONSE_LIMIT_MS);
       }, plannedDelay);
     },
     on_finish: () => {
@@ -432,6 +473,15 @@ function spacePage(html, data = {}) {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: `<div class="page">${html}<p class="session-note">按空格键继续</p></div>`,
     choices: [" "],
+    data
+  };
+}
+
+function confirmPage(html, data = {}) {
+  return {
+    type: jsPsychHtmlButtonResponse,
+    stimulus: `<div class="page">${html}</div>`,
+    choices: ["确认"],
     data
   };
 }
@@ -495,8 +545,8 @@ timeline.push(spacePage(`<div class="instruction"><h2>实验说明</h2>
   <p>第一阶段需要选择最终更偏好的选项：偏好左侧请按F键，偏好右侧请按J键。后续阶段会在思考过程中询问你“此时此刻”的偏好。</p></div>`, { phase: "instruction" }));
 
 timeline.push(spacePage(`<div class="instruction"><h2>注意</h2>
-      <p>后续阶段中，两个选项会在你思考时自动消失。选项消失后，请通过滑块报告它们消失那一刻你更偏好哪一个；提交后该题直接结束。</p>
-  <p>滑块必须移动后才能提交。</p></div>`, { phase: "instruction" }));
+      <p>后续阶段中，两个选项的金额和时间会在你思考时被随机字符覆盖。覆盖后，请立即在横线上点击，报告你在覆盖那一刻的偏好程度。</p>
+  <p>每题开始前请点击屏幕中央，并让鼠标停在中央；内容被覆盖后再移向横线。圆点会跟随鼠标移动，第一次点击会直接提交。</p></div>`, { phase: "instruction" }));
 
 const practiceTimeline = [];
 practiceTimeline.push(spacePage(`<h2>二项选择练习</h2>
@@ -514,12 +564,14 @@ PRACTICE_CONDITIONS.forEach((condition, index) => {
   practiceTimeline.push(practiceTrial(condition, index));
 });
 
-practiceTimeline.push(spacePage(`<h2>中途偏好报告练习</h2>
-  <p>下面完成5道练习。两个选项会在你思考时自动消失；消失后，请在3秒内报告那一刻你更偏好哪一个。</p>
-  <p>刺激消失后不会再次显示，请在刺激呈现期间认真阅读。</p>`, {
+practiceTimeline.push(confirmPage(`<h2>中途偏好报告练习</h2>
+  <p>下面完成5道练习。金额和时间会被随机字符覆盖；覆盖后，请在1秒内将鼠标移到横线上的合适位置并单击。</p>
+  <p>每题先点击屏幕中央，并让鼠标停在中央，等内容被覆盖后再移动。圆点会跟随鼠标，第一次点击会立即提交。</p>
+  <p>请报告覆盖那一刻的偏好，不要在覆盖后继续比较。</p>`, {
   phase: "probe_practice_instruction"
 }));
 PROBE_FRACTIONS.forEach((fraction, index) => {
+  practiceTimeline.push(mouseCenterTrial("probe_practice_mouse_center", 0, index));
   practiceTimeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: '<div class="fixation">+</div>',
@@ -625,8 +677,13 @@ const probeSessions = buildBalancedProbeSessions();
 probeSessions.forEach((specs, probeSessionIndex) => {
   const sessionId = probeSessionIndex + 2;
   timeline.push(oneMinuteRest(sessionId));
-  timeline.push(sessionStart(sessionId, "本阶段中，两个选项会在你思考时自动消失。选项消失后，请报告它们消失那一刻你更偏好哪一个。"));
+  timeline.push(confirmPage(`<h2>Session ${sessionId}</h2>
+    <p>本阶段中，两个选项的金额和时间会在你思考时被随机字符覆盖。覆盖后，请立即在横线上点击，报告覆盖那一刻的偏好。</p>`, {
+    phase: "session_start",
+    session_id: sessionId
+  }));
   specs.forEach((spec, index) => {
+    timeline.push(mouseCenterTrial("probe_mouse_center", sessionId, index));
     timeline.push({ type: jsPsychHtmlKeyboardResponse, stimulus: '<div class="fixation">+</div>', choices: "NO_KEYS", trial_duration: 500 });
     timeline.push(probeTrial(spec, sessionId, index));
   });
