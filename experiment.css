@@ -13,34 +13,36 @@ body {
   font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
 }
 
-.page { width: min(500px, 90vw); margin: 0 auto; }
+.page { width: min(680px, 90vw); margin: 0 auto; }
 .instruction { font-size: 20px; line-height: 1.9; text-align: left; }
+.instruction h2 { margin-bottom: 28px; }
+.instruction p { margin: 18px 0; }
 .fixation { font-size: 54px; font-weight: 300; }
 
-.decision-wrap { width: min(500px, 92vw); margin: 0 auto; }
+.decision-wrap { width: min(620px, 92vw); margin: 0 auto; }
 .decision-prompt { font-size: 23px; margin-bottom: 34px; }
-.options { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+.options { display: grid; grid-template-columns: 1fr 1fr; gap: 42px; }
 .option-card {
-  min-height: 135px;
+  min-height: 148px;
   border: 2px solid var(--line);
   border-radius: 14px;
   background: var(--panel);
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 20px;
+  padding: 24px;
   box-sizing: border-box;
 }
-.option-label { color: var(--muted); font-size: 17px; margin-bottom: 10px; }
+.option-label { color: var(--muted); font-size: 17px; margin-bottom: 14px; }
 .option-main { font-size: 29px; font-weight: 650; line-height: 1.55; }
 .option-delay, .option-amount { display: block; }
 .key-hint { margin-top: 26px; color: var(--muted); font-size: 18px; }
 
-.probe-area { width: min(500px, 92vw); margin: 0 auto; }
+.probe-area { width: min(620px, 92vw); margin: 0 auto; }
 .probe-question { font-size: 22px; margin-bottom: 24px; }
 .masked-option {
   width: 100%;
-  min-height: 118px;
+  min-height: 132px;
   color: #8b929d;
   font-family: inherit;
   border-color: #e2e5e9;
@@ -59,13 +61,13 @@ body {
 }
 .preference-line-wrap {
   display: grid;
-  grid-template-columns: 90px 1fr 90px;
-  gap: 10px;
+  grid-template-columns: 100px 1fr 100px;
+  gap: 14px;
   align-items: center;
   position: fixed;
   left: 50%;
   top: 72%;
-  width: min(500px, 86vw);
+  width: min(620px, 88vw);
   transform: translate(-50%, -50%);
 }
 .preference-line {
