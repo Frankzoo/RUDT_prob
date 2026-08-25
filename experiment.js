@@ -574,7 +574,8 @@ timeline.push(confirmPage(`<div class="instruction"><h2>屏幕与观看距离校
 
 timeline.push({
   type: jsPsychVirtualChinrest,
-  resize_units: "none",
+  resize_units: "deg",
+  pixels_per_unit: 50,
   blindspot_reps: 3,
   item_width_mm: 85.6,
   item_height_mm: 53.98,
