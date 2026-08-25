@@ -42,14 +42,12 @@ body {
 .probe-question { font-size: 22px; margin-bottom: 24px; }
 .masked-option {
   width: 100%;
-  min-height: 132px;
   color: #8b929d;
   font-family: inherit;
   border-color: #e2e5e9;
   background: #f4f5f7;
 }
-.masked-options { opacity: .72; }
-.mask-content { letter-spacing: 10px; font-size: 25px; }
+.mask-content { letter-spacing: 10px; }
 .click-now-cue {
   position: fixed;
   left: 50%;

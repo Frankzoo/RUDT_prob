@@ -102,18 +102,6 @@ function scanOptionHtml(side) {
   </div>`;
 }
 
-function maskedOptionHtml(side) {
-  const masks = ["#%#", "%&#", "&%&", "#&#"];
-  const first = jsPsych.randomization.sampleWithoutReplacement(masks, 1)[0];
-  const second = jsPsych.randomization.sampleWithoutReplacement(masks, 1)[0];
-  return `<div class="option-card masked-option" data-side="${side}">
-    <div class="option-main mask-content">
-      <span class="option-delay">${first}</span>
-      <span class="option-amount">${second}</span>
-    </div>
-  </div>`;
-}
-
 function trialOptions(condition, llSide) {
   const ss = { kind: "SS", amount: condition.ssAmount, delay: condition.ssDelay };
   const ll = { kind: "LL", amount: condition.llAmount, delay: condition.llDelay };
@@ -408,10 +396,6 @@ function probeTrial(spec, sessionId, index) {
       </div>
       </div>
       <div class="probe-area" id="probe-area" hidden>
-        <div class="options masked-options">
-          ${maskedOptionHtml("left")}
-          ${maskedOptionHtml("right")}
-        </div>
         <div class="click-now-cue">立即点击</div>
         <div class="preference-line-wrap">
           <div class="line-anchor left-anchor">偏好左侧</div>
@@ -442,7 +426,18 @@ function probeTrial(spec, sessionId, index) {
         const stimulusPanel = document.getElementById("stimulus-panel");
         const preferenceLine = document.getElementById("preference-line");
         const preferenceMarker = document.getElementById("preference-marker");
-        stimulusPanel.remove();
+        const masks = ["#%#", "%&#", "&%&", "#&#"];
+        stimulusPanel.querySelector(".decision-prompt").style.visibility = "hidden";
+        stimulusPanel.querySelectorAll(".option-card").forEach(card => {
+          const label = card.querySelector(".option-label");
+          const main = card.querySelector(".option-main");
+          label.style.visibility = "hidden";
+          card.classList.add("masked-option");
+          main.classList.add("mask-content");
+          const first = jsPsych.randomization.sampleWithoutReplacement(masks, 1)[0];
+          const second = jsPsych.randomization.sampleWithoutReplacement(masks, 1)[0];
+          main.innerHTML = `<span class="option-delay">${first}</span><span class="option-amount">${second}</span>`;
+        });
         probeArea.hidden = false;
         let finished = false;
         let latestRaw = 50;
