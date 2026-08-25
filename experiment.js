@@ -73,7 +73,7 @@ const scanCheckState = {
 
 jsPsych.data.addProperties({
   participant_id: participantId,
-  experiment_version: "prototype_5_masked_mouse_line",
+  experiment_version: "prototype_6_virtual_chinrest",
   amount_unit: "CNY",
   delay_unit: "week"
 });
@@ -565,6 +565,38 @@ timeline.push({
   button_label: "进入全屏"
 });
 
+timeline.push(confirmPage(`<div class="instruction"><h2>屏幕与观看距离校准</h2>
+  <p>接下来需要先校准屏幕尺寸和观看距离。请准备一张银行卡大小的卡片；如果没有卡片，也可以用直尺将屏幕图形调整为宽85.6毫米。</p>
+  <p>随后需要短暂遮住右眼，用左眼注视屏幕上的黑色方块，并在红点消失时按空格。</p>
+  <p>校准完成后，请尽量保持相同的坐姿和观看距离。</p></div>`, {
+  phase: "virtual_chinrest_instruction"
+}));
+
+timeline.push({
+  type: jsPsychVirtualChinrest,
+  resize_units: "none",
+  blindspot_reps: 3,
+  item_width_mm: 85.6,
+  item_height_mm: 53.98,
+  item_init_size: 250,
+  adjustment_prompt: `<p>请将一张银行卡大小的卡片贴近屏幕，拖动图形右下角，使图形与卡片大小一致。</p>
+    <p>如果没有卡片，请用直尺将图形宽度调整为85.6毫米。</p>`,
+  adjustment_button_prompt: "大小一致后点击这里",
+  blindspot_prompt: `<p>下面测量观看距离。请将左手放在空格键上，用右手遮住右眼，只用左眼持续注视黑色方块。</p>
+    <p>红点从右向左移动；当红点从视野中消失时，立即按空格。准备好后按空格开始。</p>`,
+  redo_measurement_button_label: "距离不准确，重新测量",
+  blindspot_done_prompt: "距离大致准确，继续",
+  blindspot_measurements_prompt: "剩余测量次数：",
+  viewing_distance_report: `根据测量，你与屏幕的距离约为
+    <span id="distance-estimate" style="font-weight:bold;"></span>。这个结果大致准确吗？`,
+  data: { phase: "virtual_chinrest" }
+});
+
+timeline.push(confirmPage(`<div class="instruction"><h2>校准完成</h2>
+  <p>请保持当前的坐姿和观看距离，实验过程中尽量不要前后移动身体或改变屏幕位置。</p></div>`, {
+  phase: "virtual_chinrest_complete"
+}));
+
 timeline.push(spacePage(`<div class="instruction"><h2>实验说明</h2>
   <p>你将看到两个在不同时间获得不同金额的选项。所有选择均无对错，请按照自己的真实偏好作答。</p>
   <p>第一阶段需要选择最终更偏好的选项：偏好左侧请按F键，偏好右侧请按J键。后续阶段会在思考过程中询问你“此时此刻”的偏好。</p></div>`, { phase: "instruction" }));
@@ -762,7 +794,7 @@ const adaptiveScanCheck = {
             scanCheckState.duration = nextDuration;
           }
         }
-        if (scanCheckState.trialCount >= 6) {
+        if (scanCheckState.trialCount >= 12) {
           scanCheckState.complete = true;
           scanCheckState.hitSafetyLimit = true;
         }
