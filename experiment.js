@@ -429,9 +429,7 @@ function probeTrial(spec, sessionId, index) {
         const masks = ["#%#", "%&#", "&%&", "#&#"];
         stimulusPanel.querySelector(".decision-prompt").style.visibility = "hidden";
         stimulusPanel.querySelectorAll(".option-card").forEach(card => {
-          const label = card.querySelector(".option-label");
           const main = card.querySelector(".option-main");
-          label.style.visibility = "hidden";
           card.classList.add("masked-option");
           main.classList.add("mask-content");
           const first = jsPsych.randomization.sampleWithoutReplacement(masks, 1)[0];
