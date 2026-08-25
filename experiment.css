@@ -30,11 +30,11 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: center;
   padding: 24px;
   box-sizing: border-box;
 }
-.option-label { color: var(--muted); font-size: 17px; margin-bottom: 14px; }
-.option-main { font-size: 29px; font-weight: 650; line-height: 1.55; }
+.option-main { width: 100%; text-align: center; font-size: 29px; font-weight: 650; line-height: 1.55; }
 .option-delay, .option-amount { display: block; }
 .key-hint { margin-top: 26px; color: var(--muted); font-size: 18px; }
 

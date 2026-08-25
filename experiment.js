@@ -84,7 +84,6 @@ function shuffled(array) {
 
 function optionHtml(option, side) {
   return `<div class="option-card" id="${side}-option">
-    <div class="option-label">${side === "left" ? "左侧选项" : "右侧选项"}</div>
     <div class="option-main">
       <span class="option-delay">${option.delay}周后</span>
       <span class="option-amount">${option.amount}元</span>
@@ -94,7 +93,6 @@ function optionHtml(option, side) {
 
 function scanOptionHtml(side) {
   return `<div class="option-card" id="${side}-option">
-    <div class="option-label">${side === "left" ? "左侧选项" : "右侧选项"}</div>
     <div class="option-main">
       <span class="option-delay">X周后</span>
       <span class="option-amount">XX元</span>
@@ -398,12 +396,12 @@ function probeTrial(spec, sessionId, index) {
       <div class="probe-area" id="probe-area" hidden>
         <div class="click-now-cue">立即点击</div>
         <div class="preference-line-wrap">
-          <div class="line-anchor left-anchor">偏好左侧</div>
+          <div class="line-anchor left-anchor" aria-hidden="true"></div>
           <div class="preference-line" id="preference-line">
             <div class="line-midpoint"></div>
             <div class="preference-marker" id="preference-marker" hidden></div>
           </div>
-          <div class="line-anchor right-anchor">偏好右侧</div>
+          <div class="line-anchor right-anchor" aria-hidden="true"></div>
         </div>
       </div>
     </div>`,
