@@ -708,11 +708,12 @@ repeatedScanDurations.forEach((duration, index) => {
 });
 
 timeline.push({
-  type: jsPsychHtmlButtonResponse,
+  type: jsPsychHtmlKeyboardResponse,
   stimulus: () => `<div class="page"><h2>初步测量完成</h2>
     <p>接下来会使用真实的金额和时间进一步确认你的扫视时间。</p>
-    <p>每题内容消失后，仍请按F或J报告是否有足够时间扫过左右两边的全部内容。</p></div>`,
-  choices: ["确认"],
+    <p>每题内容消失后，仍请按F或J报告是否有足够时间扫过左右两边的全部内容。</p>
+    <p class="session-note">按空格键继续</p></div>`,
+  choices: [" "],
   data: { phase: "scan_threshold_initial_summary" },
   on_start: trial => {
     trial.data.initial_scan_threshold_ms = participantEncodingTime();
