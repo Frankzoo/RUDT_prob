@@ -13,13 +13,13 @@ body {
   font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
 }
 
-.page { width: min(920px, 90vw); margin: 0 auto; }
+.page { width: min(500px, 90vw); margin: 0 auto; }
 .instruction { font-size: 20px; line-height: 1.9; text-align: left; }
 .fixation { font-size: 54px; font-weight: 300; }
 
-.decision-wrap { width: min(960px, 92vw); margin: 0 auto; }
+.decision-wrap { width: min(500px, 92vw); margin: 0 auto; }
 .decision-prompt { font-size: 23px; margin-bottom: 34px; }
-.options { display: grid; grid-template-columns: 1fr 1fr; gap: 72px; }
+.options { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
 .option-card {
   min-height: 135px;
   border: 2px solid var(--line);
@@ -36,7 +36,7 @@ body {
 .option-delay, .option-amount { display: block; }
 .key-hint { margin-top: 26px; color: var(--muted); font-size: 18px; }
 
-.probe-area { width: min(960px, 92vw); margin: 0 auto; }
+.probe-area { width: min(500px, 92vw); margin: 0 auto; }
 .probe-question { font-size: 22px; margin-bottom: 24px; }
 .masked-option {
   width: 100%;
@@ -59,13 +59,13 @@ body {
 }
 .preference-line-wrap {
   display: grid;
-  grid-template-columns: 145px 1fr 145px;
-  gap: 18px;
+  grid-template-columns: 90px 1fr 90px;
+  gap: 10px;
   align-items: center;
   position: fixed;
   left: 50%;
   top: 72%;
-  width: min(780px, 86vw);
+  width: min(500px, 86vw);
   transform: translate(-50%, -50%);
 }
 .preference-line {
