@@ -49,7 +49,7 @@ const DEFAULT_EXECUTION_MS = 200;
 const MIN_VALID_ENCODING_MS = 200;
 const MAX_VALID_ENCODING_MS = 3000;
 const MIN_DECISION_COMPONENT_MS = 100;
-const CLICK_RESPONSE_LIMIT_MS = 1000;
+const CLICK_RESPONSE_LIMIT_MS = 1500;
 const ITI_MS = [500, 800];
 
 const jsPsych = initJsPsych({
@@ -59,6 +59,17 @@ const jsPsych = initJsPsych({
 const urlId = jsPsych.data.getURLVariable("participant_id") || jsPsych.data.getURLVariable("subject");
 const participantId = urlId || jsPsych.randomization.randomID(10);
 const timeline = [];
+const scanCheckState = {
+  duration: null,
+  firstAnswer: null,
+  direction: null,
+  minYes: Infinity,
+  complete: false,
+  trialCount: 0,
+  currentCondition: null,
+  currentLlSide: null,
+  hitSafetyLimit: false
+};
 
 jsPsych.data.addProperties({
   participant_id: participantId,
@@ -242,7 +253,7 @@ function mouseCenterTrial(phase, sessionId, index) {
     choices: "NO_KEYS",
     stimulus: `<div class="mouse-center-page">
       <button type="button" class="mouse-start-target" id="mouse-start-target">点击此处开始</button>
-      <p class="session-note">请将鼠标移回屏幕中央</p>
+      <p class="session-note">请将鼠标移到这里</p>
     </div>`,
     data: {
       phase,
@@ -290,9 +301,20 @@ function participantExecutionTime() {
 }
 
 function participantEncodingTime() {
-  const yesDurations = jsPsych.data.get().filter({ phase: "scan_threshold_response", can_scan_all: true })
-    .select("scan_duration_ms").values.map(Number).filter(Number.isFinite);
-  return yesDurations.length ? Math.min(...yesDurations) : Math.max(...SCAN_DURATIONS_MS);
+  const checkRows = jsPsych.data.get().filter({ phase: "scan_threshold_check_response" }).values();
+  const checkYesDurations = checkRows.filter(row => row.can_scan_all === true)
+    .map(row => Number(row.scan_duration_ms)).filter(Number.isFinite);
+  if (checkYesDurations.length) return Math.min(...checkYesDurations);
+  const checkDurations = checkRows.map(row => Number(row.scan_duration_ms)).filter(Number.isFinite);
+  if (checkDurations.length) return Math.max(...checkDurations);
+  const initialRows = jsPsych.data.get().filter({ phase: "scan_threshold_response" }).values();
+  const consistentYesDurations = SCAN_DURATIONS_MS.filter(duration => {
+    const rowsAtDuration = initialRows.filter(row => Number(row.scan_duration_ms) === duration);
+    return rowsAtDuration.length >= 2 && rowsAtDuration.filter(row => row.can_scan_all === true).length >= 2;
+  });
+  return consistentYesDurations.length
+    ? Math.min(...consistentYesDurations)
+    : Math.max(...SCAN_DURATIONS_MS);
 }
 
 function baselineSummary(conditionId) {
@@ -423,15 +445,23 @@ function probeTrial(spec, sessionId, index) {
         stimulusPanel.remove();
         probeArea.hidden = false;
         let finished = false;
+        let latestRaw = 50;
         const positionFromEvent = event => {
           const rect = preferenceLine.getBoundingClientRect();
           const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
           return { x, raw: Math.round((x / rect.width) * 100) };
         };
-        const finishResponse = (raw, timedOut) => {
+        const trackMouse = event => {
+          const position = positionFromEvent(event);
+          latestRaw = position.raw;
+          preferenceMarker.hidden = false;
+          preferenceMarker.style.left = `${position.x}px`;
+        };
+        const finishResponse = (raw, timedOut, clicked) => {
           if (finished) return;
           finished = true;
           window.clearTimeout(responseTimerId);
+          document.removeEventListener("mousemove", trackMouse);
           const llPreference = raw === null ? null : (spec.llSide === "right" ? raw : 100 - raw);
           jsPsych.finishTrial({
             ...baseline,
@@ -441,23 +471,18 @@ function probeTrial(spec, sessionId, index) {
             probe_timing_error_ms: actualProbeOnset - stimulusOnset - plannedDelay,
             line_raw: raw,
             line_ll_preference: llPreference,
+            line_clicked: clicked,
             line_timed_out: timedOut,
             line_response_limit_ms: CLICK_RESPONSE_LIMIT_MS,
             line_rt: performance.now() - actualProbeOnset
           });
         };
-        preferenceLine.addEventListener("mousemove", event => {
-          const position = positionFromEvent(event);
-          preferenceMarker.hidden = false;
-          preferenceMarker.style.left = `${position.x}px`;
-        });
-        preferenceLine.addEventListener("mouseleave", () => {
-          preferenceMarker.hidden = true;
-        });
+        document.addEventListener("mousemove", trackMouse);
         preferenceLine.addEventListener("click", event => {
-          finishResponse(positionFromEvent(event).raw, false);
+          latestRaw = positionFromEvent(event).raw;
+          finishResponse(latestRaw, false, true);
         }, { once: true });
-        responseTimerId = window.setTimeout(() => finishResponse(null, true), CLICK_RESPONSE_LIMIT_MS);
+        responseTimerId = window.setTimeout(() => finishResponse(latestRaw, true, false), CLICK_RESPONSE_LIMIT_MS);
       }, plannedDelay);
     },
     on_finish: () => {
@@ -565,7 +590,7 @@ PRACTICE_CONDITIONS.forEach((condition, index) => {
 });
 
 practiceTimeline.push(confirmPage(`<h2>中途偏好报告练习</h2>
-  <p>下面完成5道练习。金额和时间会被随机字符覆盖；覆盖后，请在1秒内将鼠标移到横线上的合适位置并单击。</p>
+  <p>下面完成5道练习。金额和时间会被随机字符覆盖；覆盖后，请在1.5秒内将鼠标移到横线上的合适位置并单击。</p>
   <p>每题先点击屏幕中央，并让鼠标停在中央，等内容被覆盖后再移动。圆点会跟随鼠标，第一次点击会立即提交。</p>
   <p>请报告覆盖那一刻的偏好，不要在覆盖后继续比较。</p>`, {
   phase: "probe_practice_instruction"
@@ -604,13 +629,15 @@ timeline.push({
 });
 
 timeline.push(spacePage(`<h2>快速扫视测量</h2>
-  <p>接下来有8道题。每道题中，左右两边会短暂出现“X周后 / XX元”，随后自动消失。</p>
+  <p>接下来有16道题。8种呈现时间各出现两次，顺序随机。</p>
+  <p>每道题中，左右两边会短暂出现“X周后 / XX元”，随后自动消失。</p>
   <p>请在内容出现时快速扫视左右两边。内容消失后，请报告刚才是否有足够时间让目光扫过左右两边的全部内容。</p>
   <p class="key-hint">F = 没能全部扫过　　J = 能够全部扫过</p></div>`, {
   phase: "scan_threshold_instruction"
 }));
 
-shuffled(SCAN_DURATIONS_MS).forEach((duration, index) => {
+const repeatedScanDurations = shuffled(SCAN_DURATIONS_MS.flatMap(duration => [duration, duration]));
+repeatedScanDurations.forEach((duration, index) => {
   timeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: '<div class="fixation">+</div>',
@@ -648,15 +675,127 @@ shuffled(SCAN_DURATIONS_MS).forEach((duration, index) => {
 });
 
 timeline.push({
+  type: jsPsychHtmlButtonResponse,
+  stimulus: () => `<div class="page"><h2>初步测量完成</h2>
+    <p>接下来会使用真实的金额和时间进一步确认你的扫视时间。</p>
+    <p>每题内容消失后，仍请按F或J报告是否有足够时间扫过左右两边的全部内容。</p></div>`,
+  choices: ["确认"],
+  data: { phase: "scan_threshold_initial_summary" },
+  on_start: trial => {
+    trial.data.initial_scan_threshold_ms = participantEncodingTime();
+  }
+});
+
+const scanCheckConditions = shuffled(CONDITIONS);
+const adaptiveScanCheck = {
+  timeline: [
+    {
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: '<div class="fixation">+</div>',
+      choices: "NO_KEYS",
+      trial_duration: 500,
+      data: { phase: "scan_threshold_check_fixation" }
+    },
+    {
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: () => {
+        if (!scanCheckState.currentCondition) {
+          scanCheckState.currentCondition = scanCheckConditions[scanCheckState.trialCount % scanCheckConditions.length];
+          scanCheckState.currentLlSide = Math.random() < 0.5 ? "left" : "right";
+        }
+        const options = trialOptions(scanCheckState.currentCondition, scanCheckState.currentLlSide);
+        return `<div class="decision-wrap"><div class="options">
+          ${optionHtml(options.left, "left")}${optionHtml(options.right, "right")}
+        </div></div>`;
+      },
+      choices: "NO_KEYS",
+      trial_duration: () => scanCheckState.duration,
+      data: { phase: "scan_threshold_check_stimulus" },
+      on_finish: data => {
+        Object.assign(data, {
+          scan_check_trial_index: scanCheckState.trialCount + 1,
+          scan_duration_ms: scanCheckState.duration,
+          ...conditionData(scanCheckState.currentCondition, scanCheckState.currentLlSide)
+        });
+      }
+    },
+    {
+      type: jsPsychHtmlKeyboardResponse,
+      stimulus: `<div class="page"><h2>刚才有足够时间扫过左右两边的全部内容吗？</h2>
+        <p class="key-hint">F = 没有　　J = 有</p></div>`,
+      choices: ["f", "j"],
+      data: { phase: "scan_threshold_check_response" },
+      on_start: trial => {
+        Object.assign(trial.data, {
+          scan_check_trial_index: scanCheckState.trialCount + 1,
+          scan_duration_ms: scanCheckState.duration,
+          scan_check_direction: scanCheckState.direction || "initial",
+          ...conditionData(scanCheckState.currentCondition, scanCheckState.currentLlSide)
+        });
+      },
+      on_finish: data => {
+        const canScan = data.response === "j";
+        data.can_scan_all = canScan;
+        if (canScan) scanCheckState.minYes = Math.min(scanCheckState.minYes, scanCheckState.duration);
+
+        if (scanCheckState.firstAnswer === null) {
+          scanCheckState.firstAnswer = canScan;
+          scanCheckState.direction = canScan ? "down" : "up";
+          data.answer_changed = false;
+        } else {
+          data.answer_changed = canScan !== scanCheckState.firstAnswer;
+          if (data.answer_changed) scanCheckState.complete = true;
+        }
+
+        scanCheckState.trialCount += 1;
+        if (!scanCheckState.complete) {
+          const step = scanCheckState.direction === "down" ? -50 : 50;
+          const nextDuration = scanCheckState.duration + step;
+          if (nextDuration < 50) {
+            scanCheckState.duration = 50;
+            scanCheckState.complete = true;
+          } else if (nextDuration > 3000) {
+            scanCheckState.duration = 3000;
+            scanCheckState.complete = true;
+            scanCheckState.hitSafetyLimit = true;
+          } else {
+            scanCheckState.duration = nextDuration;
+          }
+        }
+        if (scanCheckState.trialCount >= 6) {
+          scanCheckState.complete = true;
+          scanCheckState.hitSafetyLimit = true;
+        }
+        data.final_scan_threshold_ms = Number.isFinite(scanCheckState.minYes)
+          ? scanCheckState.minYes
+          : scanCheckState.duration;
+        scanCheckState.currentCondition = null;
+        scanCheckState.currentLlSide = null;
+      }
+    }
+  ],
+  on_timeline_start: () => {
+    if (scanCheckState.duration === null) scanCheckState.duration = participantEncodingTime();
+  },
+  loop_function: () => !scanCheckState.complete
+};
+timeline.push(adaptiveScanCheck);
+
+timeline.push({
   type: jsPsychHtmlKeyboardResponse,
   stimulus: () => `<div class="page"><h2>快速扫视测量完成</h2>
-    <p>程序已经确定你的个人扫视时间。</p>
+    <p>程序已经根据真实金额和时间确定你的个人扫视时间。</p>
     <p class="session-note">按空格键进入正式实验</p></div>`,
   choices: [" "],
   data: { phase: "scan_threshold_summary" },
   on_start: trial => {
+    trial.data.initial_scan_threshold_ms = jsPsych.data.get()
+      .filter({ phase: "scan_threshold_initial_summary" }).select("initial_scan_threshold_ms").values[0];
     trial.data.scan_threshold_ms = participantEncodingTime();
     trial.data.encoding_time_ms = participantEncodingTime();
+    trial.data.scan_check_trials = scanCheckState.trialCount;
+    trial.data.scan_check_direction = scanCheckState.direction;
+    trial.data.scan_check_hit_safety_limit = scanCheckState.hitSafetyLimit;
   }
 });
 
